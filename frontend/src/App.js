@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 import lennyLogo from './lenny_logo.webp';
+import Turnstile from "react-turnstile";
+
 
 function App() {
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -14,6 +16,8 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
+  const [turnstileToken, setTurnstileToken] = useState(null);
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -41,11 +45,16 @@ function App() {
     setMessages(prev => [...prev, { type: 'user', content: currentQuery }]);
     
     try {
-      const response = await axios.post(`${API_BASE}/search-with-answer`, {
+      if (!turnstileToken) {
+  setError("Please complete the verification before searching.");
+  return;
+}
 
-        query: currentQuery,
-        limit: 5
-      });
+const response = await axios.post(
+  `${API_BASE}/search-with-answer`,
+  { query: currentQuery, limit: 5 },
+  { headers: { "X-Turnstile-Token": turnstileToken } }
+);
       
       setMessages(prev => [...prev, {
         type: 'assistant',
@@ -101,7 +110,13 @@ function App() {
   };
 
   return (
+    
     <div className="App">
+    <Turnstile
+      sitekey={process.env.REACT_APP_TURNSTILE_SITE_KEY}
+      onVerify={(token) => setTurnstileToken(token)}
+      onExpire={() => setTurnstileToken(null)}
+    />
       <header className="App-header">
         <div className="header-content">
           <img src={lennyLogo} alt="Lenny's Logo" className="header-logo" />

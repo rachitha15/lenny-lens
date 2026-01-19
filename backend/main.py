@@ -15,6 +15,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from rate_limiter import check_rate_limit
+from fastapi import Header, HTTPException
+
 
 # Load environment variables
 load_dotenv()
@@ -39,6 +41,25 @@ if not OPENAI_API_KEY:
 
 # Session storage
 conversation_sessions = defaultdict(list)
+def verify_turnstile(token: str):
+    secret = os.getenv("TURNSTILE_SECRET_KEY")
+
+    if not secret:
+        raise RuntimeError("TURNSTILE_SECRET_KEY is not set")
+
+    if not token:
+        raise HTTPException(status_code=403, detail="Missing verification token")
+
+    resp = requests.post(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        data={"secret": secret, "response": token},
+        timeout=10,
+    )
+
+    data = resp.json()
+    if not data.get("success"):
+        raise HTTPException(status_code=403, detail="Verification failed")
+
 
 def get_db():
     db_url = os.getenv("DATABASE_URL")
@@ -302,9 +323,10 @@ def root():
     return {"message": "The Lenny Lens API", "status": "healthy"}
 
 @app.post("/search-with-answer")
-async def search_with_answer(request: Request, search_req: SearchRequest):
+async def search_with_answer(request: Request, search_req: SearchRequest,x_turnstile_token: str = Header(default="")):
     """Search with conversation context"""
-    
+    verify_turnstile(x_turnstile_token)
+
     ip = request.client.host
     rate_check = check_rate_limit(ip, limit=10)
     
