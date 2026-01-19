@@ -41,10 +41,11 @@ if not OPENAI_API_KEY:
 conversation_sessions = defaultdict(list)
 
 def get_db():
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL is not set")
     return psycopg2.connect(
-        user=os.getenv('DB_USER', 'rachitha.suresh'),
-        host=os.getenv('DB_HOST', 'localhost'),
-        dbname=os.getenv('DB_NAME', 'lenny_knowledge')
+        db_url
     )
 
 class SearchRequest(BaseModel):
