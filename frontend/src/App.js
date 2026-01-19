@@ -39,7 +39,7 @@ function App() {
     setMessages(prev => [...prev, { type: 'user', content: currentQuery }]);
     
     try {
-      const response = await axios.post('http://localhost:8000/search-with-answer', {
+      const response = await axios.post(`/search-with-answer`), {
         query: currentQuery,
         limit: 5
       });
@@ -74,7 +74,7 @@ function App() {
     }
     
     try {
-      await axios.post('http://localhost:8000/clear-conversation');
+      await axios.post(`/clear-conversation`));
       setMessages([]);
       setCurrentConversationLength(0);
       setConversationsRemaining(prev => prev - 1);
