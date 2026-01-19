@@ -40,7 +40,8 @@ function App() {
     setMessages(prev => [...prev, { type: 'user', content: currentQuery }]);
     
     try {
-      const response = await axios.post(`/search-with-answer`, {
+      const response = await axios.post(`${API_BASE}/search-with-answer`, {
+
         query: currentQuery,
         limit: 5
       });
