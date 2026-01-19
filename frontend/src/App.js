@@ -4,6 +4,7 @@ import './App.css';
 import lennyLogo from './lenny_logo.webp';
 
 function App() {
+  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [queriesRemaining, setQueriesRemaining] = useState(10);
@@ -39,7 +40,7 @@ function App() {
     setMessages(prev => [...prev, { type: 'user', content: currentQuery }]);
     
     try {
-      const response = await axios.post(`/search-with-answer`), {
+      const response = await axios.post(`/search-with-answer`, {
         query: currentQuery,
         limit: 5
       });
@@ -74,7 +75,7 @@ function App() {
     }
     
     try {
-      await axios.post(`/clear-conversation`));
+      await axios.post(`${API_BASE}/clear-conversation`);
       setMessages([]);
       setCurrentConversationLength(0);
       setConversationsRemaining(prev => prev - 1);
