@@ -1,0 +1,15 @@
+venv/
+.env
+*.pyc
+__pycache__/
+data/*.json
+data/parsed_*
+data/chunks*
+data/extracted_*
+node_modules/
+.DS_Store
+*.log
+data/lennys-podcast-transcripts/
+chunks_backup.sql
+__pycache__/
+*.pyc
