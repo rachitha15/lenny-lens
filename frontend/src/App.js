@@ -4,7 +4,8 @@ import './App.css';
 import lennyLogo from './lenny_logo.webp';
 
 function App() {
-  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
+  const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
+
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [queriesRemaining, setQueriesRemaining] = useState(10);
