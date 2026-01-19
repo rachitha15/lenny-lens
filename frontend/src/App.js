@@ -4,9 +4,9 @@ import './App.css';
 import lennyLogo from './lenny_logo.webp';
 import Turnstile from "react-turnstile";
 
-
 function App() {
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
+  const TURNSTILE_SITE_KEY = process.env.REACT_APP_TURNSTILE_SITE_KEY || "";
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +18,6 @@ function App() {
   const messagesEndRef = useRef(null);
   const [turnstileToken, setTurnstileToken] = useState(null);
 
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -29,48 +28,59 @@ function App() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    
+
     if (!query.trim()) return;
-    
+
     if (currentConversationLength >= 5) {
       setError('This conversation has reached 5 messages. Start a new conversation to continue!');
       return;
     }
-    
+
+    // If Turnstile is enabled, require token BEFORE we start loading / changing UI
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Please complete the verification before searching.");
+      return;
+    }
+
     const currentQuery = query;
     setQuery('');
     setLoading(true);
     setError(null);
-    
-    setMessages(prev => [...prev, { type: 'user', content: currentQuery }]);
-    
-    try {
-      if (!turnstileToken) {
-  setError("Please complete the verification before searching.");
-  return;
-}
 
-const response = await axios.post(
-  `${API_BASE}/search-with-answer`,
-  { query: currentQuery, limit: 5 },
-  { headers: { "X-Turnstile-Token": turnstileToken } }
-);
-      
+    setMessages(prev => [...prev, { type: 'user', content: currentQuery }]);
+
+    try {
+      const headers = TURNSTILE_SITE_KEY
+        ? { "X-Turnstile-Token": turnstileToken }
+        : {};
+
+      const response = await axios.post(
+        `${API_BASE}/search-with-answer`,
+        { query: currentQuery, limit: 5 },
+        { headers }
+      );
+
       setMessages(prev => [...prev, {
         type: 'assistant',
         content: response.data.answer,
         sources: response.data.sources,
         conversation_length: response.data.conversation_length
       }]);
-      
+
       setCurrentConversationLength(response.data.conversation_length);
       setQueriesRemaining(response.data.queries_remaining);
+
+      // Make each search require a fresh verification (prevents token reuse)
+      if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
     } catch (err) {
       setMessages(prev => prev.slice(0, -1));
-      
+
       if (err.response?.status === 429) {
-        setError('⚠️ Daily query limit reached! Try again tomorrow.');
+        setError('Daily query limit reached! Try again tomorrow.');
         setQueriesRemaining(0);
+      } else if (err.response?.status === 403) {
+        setError(err.response?.data?.detail || 'Verification failed. Please retry the verification and search again.');
+        if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
       } else {
         setError(err.response?.data?.detail || 'Search failed. Please try again.');
       }
@@ -84,15 +94,29 @@ const response = await axios.post(
       setError('You\'ve used both conversations for today. Try again tomorrow!');
       return;
     }
-    
+
+    // If Turnstile is enabled, require token before clearing too
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Please complete the verification before starting a new conversation.");
+      return;
+    }
+
     try {
-      await axios.post(`${API_BASE}/clear-conversation`);
+      const headers = TURNSTILE_SITE_KEY
+        ? { "X-Turnstile-Token": turnstileToken }
+        : {};
+
+      await axios.post(`${API_BASE}/clear-conversation`, {}, { headers });
+
       setMessages([]);
       setCurrentConversationLength(0);
       setConversationsRemaining(prev => prev - 1);
       setError(null);
+
+      if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
     } catch (err) {
-      console.error('Failed to clear conversation');
+      setError(err.response?.data?.detail || 'Failed to clear conversation. Please try again.');
+      if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
     }
   };
 
@@ -103,20 +127,8 @@ const response = await axios.post(
     "Compare Brian Chesky and Reid Hoffman on company culture",
   ];
 
-  const getUniqueEpisodeCount = (sources) => {
-    if (!sources) return 0;
-    const uniqueEpisodes = new Set(sources.map(s => s.episode_title));
-    return uniqueEpisodes.size;
-  };
-
   return (
-    
     <div className="App">
-    <Turnstile
-      sitekey={process.env.REACT_APP_TURNSTILE_SITE_KEY}
-      onVerify={(token) => setTurnstileToken(token)}
-      onExpire={() => setTurnstileToken(null)}
-    />
       <header className="App-header">
         <div className="header-content">
           <img src={lennyLogo} alt="Lenny's Logo" className="header-logo" />
@@ -124,26 +136,36 @@ const response = await axios.post(
         </div>
       </header>
 
+      {/* Turnstile lives right under header so it’s always visible */}
+      {TURNSTILE_SITE_KEY && (
+        <div className="turnstile-wrap">
+          <Turnstile
+            sitekey={TURNSTILE_SITE_KEY}
+            onVerify={(token) => setTurnstileToken(token)}
+            onExpire={() => setTurnstileToken(null)}
+            onError={() => setTurnstileToken(null)}
+          />
+        </div>
+      )}
+
       <main className="App-main">
         {messages.length === 0 ? (
-          // LANDING PAGE - Wisdom Hub Style
           <div className="landing-page">
             <div className="hero-section">
               <div className="hero-badge">
                 🎙️ 303 episodes • 299 guests • Powered by semantic AI
               </div>
-              
+
               <h2 className="hero-title">
-                Deep dive into <span className="highlight">303 episodes</span><br/>
+                Deep dive into <span className="highlight">303 episodes</span><br />
                 of PM wisdom
               </h2>
-              
+
               <p className="hero-subtitle">
-                Get answers that help you decide, not just inform.<br/>
+                Get answers that help you decide, not just inform.<br />
                 Multiple perspectives synthesized • Contradictions resolved • Actionable playbooks included
               </p>
 
-              {/* Search Input - Prominent */}
               <form onSubmit={handleSearch} className="hero-search-form">
                 <div className="search-wrapper">
                   <input
@@ -155,9 +177,9 @@ const response = await axios.post(
                     disabled={loading || queriesRemaining === 0}
                     autoFocus
                   />
-                  <button 
-                    type="submit" 
-                    className="hero-search-button" 
+                  <button
+                    type="submit"
+                    className="hero-search-button"
                     disabled={loading || queriesRemaining === 0 || !query.trim()}
                   >
                     {loading ? '...' : '→'}
@@ -165,7 +187,8 @@ const response = await axios.post(
                 </div>
               </form>
 
-              {/* Example Queries - Show decision-focused ones */}
+              {error && <div className="error-banner">{error}</div>}
+
               <div className="example-pills">
                 {exampleQueries.map((example, idx) => (
                   <button
@@ -178,14 +201,12 @@ const response = await axios.post(
                 ))}
               </div>
 
-              {/* Limits Info - Subtle at bottom */}
               <div className="limits-info">
                 💡 {queriesRemaining} queries • 2 conversations • 5 messages each
               </div>
             </div>
           </div>
         ) : (
-          // CONVERSATION VIEW
           <>
             <div className="conversation-status">
               <div className="status-left">
@@ -218,7 +239,7 @@ const response = await axios.post(
                           <div className="message-bubble">
                             <div className="answer-text">{msg.content}</div>
                           </div>
-                          
+
                           {msg.sources && msg.sources.length > 0 && (
                             <div className="message-sources">
                               <div className="sources-header">📚 Based on insights from:</div>
@@ -241,7 +262,7 @@ const response = await axios.post(
                     )}
                   </div>
                 ))}
-                
+
                 {loading && (
                   <div className="message-wrapper assistant">
                     <div className="assistant-message">
@@ -258,23 +279,23 @@ const response = await axios.post(
                     </div>
                   </div>
                 )}
-                
+
                 <div ref={messagesEndRef} />
               </div>
             </div>
 
             <div className="input-area">
               {error && <div className="error-banner">{error}</div>}
-              
+
               {currentConversationLength >= 5 && (
                 <div className="limit-warning">
-                  💬 Conversation complete (5/5 messages). 
+                  💬 Conversation complete (5/5 messages).
                   <button onClick={startNewConversation} className="inline-new-btn">
                     Start new conversation
                   </button>
                 </div>
               )}
-              
+
               <form onSubmit={handleSearch} className="input-form">
                 <input
                   type="text"
@@ -285,9 +306,9 @@ const response = await axios.post(
                   disabled={loading || queriesRemaining === 0 || currentConversationLength >= 5}
                   autoFocus
                 />
-                <button 
-                  type="submit" 
-                  className="send-button" 
+                <button
+                  type="submit"
+                  className="send-button"
                   disabled={loading || queriesRemaining === 0 || !query.trim() || currentConversationLength >= 5}
                 >
                   {loading ? '...' : '→'}
