@@ -3,6 +3,7 @@ import axios from 'axios';
 import './App.css';
 import lennyLogo from './lenny_logo.webp';
 import Turnstile from "react-turnstile";
+import ReactMarkdown from 'react-markdown';
 
 function App() {
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -237,7 +238,9 @@ function App() {
                         </div>
                         <div className="assistant-content">
                           <div className="message-bubble">
-                            <div className="answer-text">{msg.content}</div>
+                            <div className="answer-text">
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            </div>
                           </div>
 
                           {msg.sources && msg.sources.length > 0 && (
