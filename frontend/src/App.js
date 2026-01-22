@@ -33,6 +33,14 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const [turnstileKey, setTurnstileKey] = useState(0);
+
+const resetTurnstile = () => {
+  if (!TURNSTILE_SITE_KEY) return;
+  setTurnstileToken(null);
+  setTurnstileKey((k) => k + 1); // forces Turnstile to remount and re-issue token
+};
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -80,7 +88,7 @@ function App() {
       setCurrentConversationLength(response.data.conversation_length);
       setQueriesRemaining(response.data.queries_remaining);
 
-      if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
+      resetTurnstile();
     } catch (err) {
       setMessages(prev => prev.slice(0, -1));
 
@@ -89,7 +97,7 @@ function App() {
         setQueriesRemaining(0);
       } else if (err.response?.status === 403) {
         setError(err.response?.data?.detail || 'Verification failed. Please retry the verification and search again.');
-        if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
+        resetTurnstile();
       } else {
         setError(err.response?.data?.detail || 'Search failed. Please try again.');
       }
@@ -168,10 +176,10 @@ function App() {
       setConversationsRemaining(prev => prev - 1);
       setError(null);
 
-      if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
+      resetTurnstile();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to clear conversation. Please try again.');
-      if (TURNSTILE_SITE_KEY) setTurnstileToken(null);
+      resetTurnstile();
     }
   };
 
@@ -220,10 +228,11 @@ function App() {
       {TURNSTILE_SITE_KEY && (
         <div className="turnstile-wrap">
           <Turnstile
+            key={turnstileKey}
             sitekey={TURNSTILE_SITE_KEY}
             onVerify={(token) => setTurnstileToken(token)}
-            onExpire={() => setTurnstileToken(null)}
-            onError={() => setTurnstileToken(null)}
+            onExpire={() => resetTurnstile()}
+            onError={() => resetTurnstile()}
           />
         </div>
       )}
