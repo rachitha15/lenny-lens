@@ -607,6 +607,32 @@ async def get_guide_detail(guide_id: int, request: Request):
     
     return guide
 
+@app.post("/retrieve-chunks")
+async def retrieve_chunks(
+    search_req: SearchRequest,
+    x_api_key: str = Header(default="")
+):
+    """Chunk retrieval endpoint for MCP/Compass integration - no Turnstile needed"""
+    
+    expected_key = os.getenv("COMPASS_API_KEY")
+    if not expected_key or x_api_key != expected_key:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    if not search_req.query or len(search_req.query.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Query must be at least 3 characters")
+    
+    query_embedding = generate_query_embedding(search_req.query)
+    chunks = search_similar_chunks(query_embedding, limit=search_req.limit)
+    high_quality = [c for c in chunks if c['similarity'] > 0.35]
+    
+    if len(high_quality) < 3:
+        high_quality = chunks[:3]
+    
+    return {
+        "query": search_req.query,
+        "chunks": high_quality[:7]
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
